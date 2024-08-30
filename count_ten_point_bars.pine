@@ -1,0 +1,43 @@
+//@version=5
+indicator("Count Bars with 10+ Points Range During Initial Balance", overlay=true)
+
+sessionStart = timestamp("UTC-4", year, month, dayofmonth, 09, 30)
+sessionEnd = timestamp("UTC-4", year, month, dayofmonth, 10, 30)
+
+today = timestamp("UTC-4", 2024, 8, 20, 09, 30)
+
+// Check if the current bar is within the IB period
+isInInitialBalance = (time >= sessionStart and time < sessionEnd) //  and time >= today)
+
+var float dailyTotal = 0
+var float totalBars = 0
+var float totalDays = 1
+
+// Reset the counter at the end of each day
+if (ta.change(time("D")) != 0)
+    // dailyTotal := 0
+
+    //if (time >= today)
+    totalDays := totalDays + 1
+
+bar_range = math.abs(close - open)
+threshold = 10
+countCondition = bar_range >= threshold and isInInitialBalance
+// countBars = ta.cum(countCondition ? 1 : 0)
+
+// Calculate number of bars today and total with 10 pts
+// dailyTotal := countCondition ? dailyTotal + 1 : dailyTotal
+totalBars := countCondition ? totalBars + 1 : totalBars
+
+// Calculate the average number of bars over the number of trading days
+averageBarsPerDay = totalBars / totalDays
+
+// Plot the average in the data window
+plot(averageBarsPerDay, title="Avg Bars with 10+ Points", color=color.blue)
+// plot(dailyTotal, title="Daily Total", color=color.blue)
+plot(totalBars, title="Total Bars", color=color.blue)
+plot(totalDays, title="Total Days", color=color.blue)
+// plot(countBars, title="Count Bars", color=color.blue)
+
+// Plot the count on the chart
+plotshape(countCondition, title="points gt 10", location=location.abovebar, color=color.blue, style=shape.cross)
