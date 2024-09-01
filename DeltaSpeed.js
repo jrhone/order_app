@@ -1,11 +1,18 @@
 const predef = require("./tools/predef");
 const EMA = require("./tools/EMA");
+const SMA = require("./tools/SMA");
+const STDEV = require("./tools/StdDev");
 
 var lastTime = null;
 var lastDelta = null;
 var maxSpeed = null;
 var lastIdx = null;
 var ema = EMA(3);
+
+var volumes = [];
+var lastBarVolume = null;
+var sma = SMA(1000);
+var std = STDEV(1000);
 
 // TODO reset speed for each bar or recent activity
 // TODO how to show sustained momentum?
@@ -19,6 +26,11 @@ class issue {
         maxSpeed = null;
         lastIdx = null;
         ema = EMA(3);
+
+        volumes = [];
+        lastBarVolume = null;
+        sma = SMA(1000);
+        std = STDEV(1000);
     }
 
     map(d, idx) {
@@ -36,11 +48,12 @@ class issue {
         // TODO a candle with really high speed will show low speed after compared to the high
         //      maybe create an average of recent max speeds
 
-        // reset speed each candle
+        // Reset speed and volume each candle
         if (lastIdx != idx){
             lastIdx = idx;
             // TODO use recent bucket of tick data so you don't have to do a full reset
             maxSpeed = null; // TODO 1e-10; // change divide by 0 checks
+            lastBarVolume = null;
         }
 
         const now = new Date()
@@ -76,10 +89,30 @@ class issue {
             console.log(`Strong momentum detected: ${normalizedSpeed} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
+        // Volume Spike
+        const barVolume = d.volume();
+        // const tickVolume = barVolume - (lastBarVolume ? lastBarVolume : 0);
+        const tickVolume = lastBarVolume ? barVolume - lastBarVolume : 0;
+        volumes.push(tickVolume);
+        // console.log(`vol ${idx} ${barVolume} ${lastBarVolume} ${tickVolume}`);
+        lastBarVolume = barVolume;
+
+        const averageVolume = sma(tickVolume);
+        const stdDevVolume = std(tickVolume);
+        // const dynamicThreshold = averageVolume * 2;
+        const dynamicThreshold = averageVolume + (3 * stdDevVolume);
+        // console.log(`other ${idx} ${tickVolume} ${averageVolume} ${stdDevVolume}`);
+
+        const isVolumeSpike = tickVolume > dynamicThreshold;
+        if (isVolumeSpike) {
+            console.log(`Volume spike detected: ${tickVolume} > ${dynamicThreshold} (at ${d.timestamp().toLocaleTimeString()})`);
+        }
+        return isVolumeSpike ? 1 : 0;
+
         // return ema(normalizedSpeed);
         // return normalizedSpeed;
         // return speed;
-        return ema(speed);
+        // return ema(speed);
     }
 
     // TODO this is making negatives positive
