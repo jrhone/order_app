@@ -74,6 +74,7 @@ class DeltaSpeed {
 
         // Threshold alert
         if (normalizedSpeed > 0.8) {
+            // TODO use stddev
             console.log(`Strong momentum detected at ${d.value()}: ${normalizedSpeed} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
