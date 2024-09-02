@@ -5,10 +5,14 @@ const meta = require("./tools/meta");
 
 var lastIdx = null;
 
+var ticksPerSecond = 5;
+var volumeWindow = ticksPerSecond * 60; // 20;
+var stdevMultiplier = 2;
+
 var volumes = [];
 var lastBarVolume = null;
-var sma = SMA(100);
-var std = STDEV(100);
+var sma = SMA(volumeWindow);
+var std = STDEV(volumeWindow);
 
 // TODO reset speed for each bar or recent activity
 // TODO how to show sustained momentum?
@@ -21,8 +25,8 @@ class VolumeSpike {
 
         volumes = [];
         lastBarVolume = null;
-        sma = SMA(100);
-        std = STDEV(100);
+        sma = SMA(volumeWindow);
+        std = STDEV(volumeWindow);
     }
 
     map(d, idx) {
@@ -54,12 +58,12 @@ class VolumeSpike {
         // const isVolumeSpike = tickVolume > dynamicThreshold;
         // if (isVolumeSpike) {
         // return isVolumeSpike ? 1 : 0
-        if (multiplier >= 3) {
+        if (multiplier >= stdevMultiplier) {
             console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
         // return multiplier > 1 ? multiplier : 0;
 
-        return multiplier > 3 ? 1 : 0;
+        return multiplier >= stdevMultiplier ? 1 : 0;
     }
 }
 

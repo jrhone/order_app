@@ -4,14 +4,21 @@ const SMA = require("./tools/SMA");
 const STDEV = require("./tools/StdDev");
 const meta = require("./tools/meta");
 
+// TODO dynamically calculate this
+var ticksPerSecond = 5;
+var deltaWindow = ticksPerSecond * 1; // Math.ceil(ticksPerSecond / 2);
+var speedWindow = ticksPerSecond * 60; //20;
+var stdevMultiplier = 3;
+
 var lastTime = null;
 var lastDelta = null;
-var maxSpeed = null;
+var maxSpeed = 1e-10;
 var lastIdx = null;
-var ema = EMA(3);
+var ema = EMA(deltaWindow);
 
-var averageSpeeds = SMA(100); // hopefully 5min worth
-var speedStdev = STDEV(100);
+var speeds = [];
+var averageSpeeds = SMA(speedWindow); // hopefully 5min worth
+var speedStdev = STDEV(speedWindow);
 
 var numticks = 0;
 
@@ -24,12 +31,13 @@ class DeltaSpeed {
     init() {
         lastTime = null;
         lastDelta = null;
-        maxSpeed = null;
+        maxSpeed = 1e-10;
         lastIdx = null;
-        ema = EMA(3);
+        ema = EMA(deltaWindow);
 
-        averageSpeeds = SMA(100);
-        speedStdev = STDEV(100);
+        speeds = [];
+        averageSpeeds = SMA(speedWindow);
+        speedStdev = STDEV(speedWindow);
     }
 
     map(d, idx) {
@@ -53,7 +61,7 @@ class DeltaSpeed {
             console.log(`idx:${idx} numticks:${numticks}`);
             numticks = 0;
             // TODO use recent bucket of tick data so you don't have to do a full reset
-            maxSpeed = null; // TODO 1e-10; // change divide by 0 checks
+            // maxSpeed = null; // TODO 1e-10; // change divide by 0 checks
         }
 
         numticks = numticks + 1;
@@ -77,7 +85,10 @@ class DeltaSpeed {
         const speed = elapsedD && elapsed ? elapsedD : 0;
         // console.log(`${elapsedD} ${elapsed} ${speed}`);
 
-        maxSpeed = Math.abs(speed) > maxSpeed ? Math.abs(speed) : maxSpeed;
+        speeds.push(speed);
+        maxSpeed = Math.max(...speeds.slice(-speedWindow).map(Math.abs));
+        // maxSpeed = Math.abs(speed) > maxSpeed ? Math.abs(speed) : maxSpeed;
+        
         // const fancyNormalizedSpeed = maxSpeed ? this.normalizeDeltaSpeed(speed, maxSpeed) : 0;
         // const dumbNormalizedSpeed = maxSpeed ? speed / maxSpeed : 0;
         // const normalizedSpeed = dumbNormalizedSpeed;
@@ -98,7 +109,7 @@ class DeltaSpeed {
 
         // const dynamicThreshold = averageSpeed + (3 * stdDevSpeed);
         // if (tickSpeed > dynamicThreshold){
-        if (multiplier >= 3) {
+        if (multiplier >= stdevMultiplier) {
             console.log(`High speed: ${multiplier} at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
         }
         // else if (tickSpeed > averageSpeed + (2 * stdDevSpeed)){
