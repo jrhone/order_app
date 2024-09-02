@@ -1,5 +1,7 @@
 const predef = require("./tools/predef");
 const EMA = require("./tools/EMA");
+const SMA = require("./tools/SMA");
+const STDEV = require("./tools/StdDev");
 const meta = require("./tools/meta");
 
 var lastTime = null;
@@ -7,6 +9,11 @@ var lastDelta = null;
 var maxSpeed = null;
 var lastIdx = null;
 var ema = EMA(3);
+
+var averageSpeeds = SMA(100); // hopefully 5min worth
+var speedStdev = STDEV(100);
+
+var numticks = 0;
 
 // TODO reset speed for each bar or recent activity
 // TODO how to show sustained momentum?
@@ -20,6 +27,9 @@ class DeltaSpeed {
         maxSpeed = null;
         lastIdx = null;
         ema = EMA(3);
+
+        averageSpeeds = SMA(100);
+        speedStdev = STDEV(100);
     }
 
     map(d, idx) {
@@ -40,10 +50,13 @@ class DeltaSpeed {
         // Reset speed and volume each candle
         if (lastIdx != idx){
             lastIdx = idx;
+            console.log(`idx:${idx} numticks:${numticks}`);
+            numticks = 0;
             // TODO use recent bucket of tick data so you don't have to do a full reset
             maxSpeed = null; // TODO 1e-10; // change divide by 0 checks
         }
 
+        numticks = numticks + 1;
         const now = new Date()
 
         const time = now.getTime();
@@ -51,8 +64,6 @@ class DeltaSpeed {
         // console.log(`idx:${idx} now:${time} last:${lastTime} elapsed:${elapsed}`);
         lastTime = time;
 
-        // TODO this is returning current price in the simulator
-        // const delta = d.value(this.props.deltaSource);
         const bidVolume = d.bidVolume();
         const askVolume = d.offerVolume();
         const delta = askVolume - bidVolume;
@@ -67,34 +78,48 @@ class DeltaSpeed {
         // console.log(`${elapsedD} ${elapsed} ${speed}`);
 
         maxSpeed = Math.abs(speed) > maxSpeed ? Math.abs(speed) : maxSpeed;
-        const fancyNormalizedSpeed = maxSpeed ? this.normalizeDeltaSpeed(speed, maxSpeed) : 0;
-        const dumbNormalizedSpeed = maxSpeed ? speed / maxSpeed : 0;
-        const normalizedSpeed = dumbNormalizedSpeed;
+        // const fancyNormalizedSpeed = maxSpeed ? this.normalizeDeltaSpeed(speed, maxSpeed) : 0;
+        // const dumbNormalizedSpeed = maxSpeed ? speed / maxSpeed : 0;
+        // const normalizedSpeed = dumbNormalizedSpeed;
         // console.log(`s ${speed} ${maxSpeed} ${dumbNormalizedSpeed} ${fancyNormalizedSpeed}`);
 
         // Threshold alert
-        if (normalizedSpeed > 0.8) {
-            // TODO use stddev
-            console.log(`Strong momentum detected at ${d.value()}: ${normalizedSpeed} (at ${d.timestamp().toLocaleTimeString()})`);
-        }
+        // if (normalizedSpeed > 0.8) {
+        //     console.log(`Strong momentum detected at ${d.value()}: ${normalizedSpeed} (at ${d.timestamp().toLocaleTimeString()})`);
+        // }
 
         // return ema(normalizedSpeed);
         // return normalizedSpeed;
         // return speed;
-        return ema(speed);
+        const tickSpeed = ema(speed);
+        const averageSpeed = averageSpeeds(tickSpeed);
+        const stdDevSpeed = speedStdev(tickSpeed);
+        const multiplier = Math.abs(Math.floor((tickSpeed - averageSpeed) / stdDevSpeed));
+
+        // const dynamicThreshold = averageSpeed + (3 * stdDevSpeed);
+        // if (tickSpeed > dynamicThreshold){
+        if (multiplier >= 3) {
+            console.log(`High speed: ${multiplier} at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
+        }
+        // else if (tickSpeed > averageSpeed + (2 * stdDevSpeed)){
+        //     console.log(`High speed detected (2) at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
+        // }
+
+        // return multiplier;
+        return tickSpeed;
     }
 
-    // TODO this is making negatives positive
-    normalizeDeltaSpeed(speed, maxSpeed) {
-        // Apply logarithmic transformation
-        const logD = Math.log(speed + 1);
-        const logMaxSpeed = Math.log(maxSpeed + 1);
+    // // TODO this is making negatives positive
+    // normalizeDeltaSpeed(speed, maxSpeed) {
+    //     // Apply logarithmic transformation
+    //     const logD = Math.log(speed + 1);
+    //     const logMaxSpeed = Math.log(maxSpeed + 1);
 
-        // Normalize to range [0, 1]
-        const normalizedValue = logD / logMaxSpeed;
+    //     // Normalize to range [0, 1]
+    //     const normalizedValue = logD / logMaxSpeed;
 
-        return normalizedValue;
-    }
+    //     return normalizedValue;
+    // }
 }
 
 module.exports = {

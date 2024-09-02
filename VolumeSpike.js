@@ -45,16 +45,21 @@ class VolumeSpike {
 
         const averageVolume = sma(tickVolume);
         const stdDevVolume = std(tickVolume);
+        const multiplier = Math.abs(Math.floor((tickVolume - averageVolume) / stdDevVolume));
         // TODO volume spikes seem rare by 10.45 am, maybe 3 deviations is too much then
         //      they do happen tho, but saw a dump where there was only one
-        const dynamicThreshold = averageVolume + (3 * stdDevVolume);
         // console.log(`other ${idx} ${tickVolume} ${stdDevVolume}`);
 
-        const isVolumeSpike = tickVolume > dynamicThreshold;
-        if (isVolumeSpike) {
-            console.log(`Volume spike detected at ${d.value()}: ${tickVolume} > ${dynamicThreshold} (at ${d.timestamp().toLocaleTimeString()})`);
+        // const dynamicThreshold = averageVolume + (3 * stdDevVolume);
+        // const isVolumeSpike = tickVolume > dynamicThreshold;
+        // if (isVolumeSpike) {
+        // return isVolumeSpike ? 1 : 0
+        if (multiplier >= 3) {
+            console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
-        return isVolumeSpike ? 1 : 0
+        // return multiplier > 1 ? multiplier : 0;
+
+        return multiplier > 3 ? 1 : 0;
     }
 }
 
