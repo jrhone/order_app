@@ -6,7 +6,7 @@ const meta = require("./tools/meta");
 var lastIdx = null;
 
 var ticksPerSecond = 5;
-var volumeWindow = ticksPerSecond * 60; // 20;
+var volumeWindow = ticksPerSecond * 60;
 var stdevMultiplier = 2;
 
 var volumes = [];
@@ -15,11 +15,6 @@ var sma = SMA(volumeWindow);
 var std = STDEV(volumeWindow);
 
 var memory = null;
-
-// TODO reset speed for each bar or recent activity
-// TODO how to show sustained momentum?
-// - smoothing or averaging (ema)
-// TODO get stats on max, avg and distribution of speeds during IB
 
 class VolumeSpike {
     init() {
@@ -48,34 +43,26 @@ class VolumeSpike {
         const barVolume = d.volume();
         const tickVolume = lastBarVolume ? barVolume - lastBarVolume : 0;
         volumes.push(tickVolume);
-        // console.log(`vol ${idx} ${barVolume} ${lastBarVolume} ${tickVolume}`);
         lastBarVolume = barVolume;
 
         const averageVolume = sma(tickVolume);
         const stdDevVolume = std(tickVolume);
         const multiplier = Math.abs(Math.floor((tickVolume - averageVolume) / stdDevVolume));
-        // TODO volume spikes seem rare by 10.45 am, maybe 3 deviations is too much then
-        //      they do happen tho, but saw a dump where there was only one
-        // console.log(`other ${idx} ${tickVolume} ${stdDevVolume}`);
 
-        // const dynamicThreshold = averageVolume + (3 * stdDevVolume);
-        // const isVolumeSpike = tickVolume > dynamicThreshold;
-        // if (isVolumeSpike) {
-        // return isVolumeSpike ? 1 : 0
         if (multiplier >= stdevMultiplier) {
             console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
-        // return multiplier > 1 ? multiplier : 0;
 
         if (memory && memory.length) {
             console.log(memory);
         }
-        // TODO use ticks per second to determine how much longer to display
-        if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){ // multiplier >= memory[-1])){
+
+        if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
             memory = [...Array(Math.min(multiplier, ticksPerSecond)).fill(multiplier)];
         }
+
         if (memory && memory.pop()){
-            // Note: uncomment to only do one extra tick instead
+            // Uncomment to do one extra tick instead
             // memory = null;
             return 1;
         }
