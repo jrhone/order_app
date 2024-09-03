@@ -6,8 +6,8 @@ const meta = require("./tools/meta");
 
 // TODO dynamically calculate this, affects the windows below
 var ticksPerSecond = 5;
-var deltaWindow = ticksPerSecond * 1; // Math.ceil(ticksPerSecond / 2);
-var speedWindow = ticksPerSecond * 60; //20;
+var deltaWindow = ticksPerSecond * 1;
+var speedWindow = ticksPerSecond * 60;
 var stdevMultiplier = 3;
 
 var lastDelta = null;
@@ -16,10 +16,12 @@ var lastIdx = null;
 var ema = EMA(deltaWindow);
 
 var speeds = [];
-var averageSpeeds = SMA(speedWindow); // hopefully 5min worth
+var averageSpeeds = SMA(speedWindow);
 var speedStdev = STDEV(speedWindow);
 
 var numticks = 0;
+
+var memory = null;
 
 // TODO get stats on max, avg and distribution of speeds during IB
 // TODO a candle with really high speed will show low speed intracandle after
@@ -34,6 +36,8 @@ class DeltaSpeed {
         speeds = [];
         averageSpeeds = SMA(speedWindow);
         speedStdev = STDEV(speedWindow);
+
+        memory = null;
     }
 
     map(d, idx) {
@@ -64,13 +68,37 @@ class DeltaSpeed {
         const tickSpeed = ema(speed);
         const averageSpeed = averageSpeeds(tickSpeed);
         const stdDevSpeed = speedStdev(tickSpeed);
-        const multiplier = Math.abs(Math.floor((tickSpeed - averageSpeed) / stdDevSpeed));
+        const rawMultiplier =  (tickSpeed - averageSpeed) / stdDevSpeed;
+        const multiplier = Math.round(Math.abs(rawMultiplier));
 
         if (multiplier >= stdevMultiplier) {
             console.log(`High speed: ${multiplier} at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
-        return tickSpeed;
+        if (memory && memory.length) {
+            console.log(memory);
+        }
+
+        if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
+            memory = [...Array(Math.min(Math.ceil(multiplier / 2), ticksPerSecond)).fill(rawMultiplier)]; // tickSpeed
+        }
+
+        if (memory){
+            const y = memory.pop();
+            if (y){
+                return y;
+            }
+        }
+
+        // if (!multiplier){
+        // if (multiplier < stdevMultiplier){
+        // if (multiplier < 0.5){
+        if (Math.abs(rawMultiplier) < 0.25){
+            return 0;
+        }
+
+        return rawMultiplier
+        // return tickSpeed;
     }
 }
 

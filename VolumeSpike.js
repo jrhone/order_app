@@ -47,7 +47,7 @@ class VolumeSpike {
 
         const averageVolume = sma(tickVolume);
         const stdDevVolume = std(tickVolume);
-        const multiplier = Math.abs(Math.floor((tickVolume - averageVolume) / stdDevVolume));
+        const multiplier = Math.round(Math.abs((tickVolume - averageVolume) / stdDevVolume));
 
         if (multiplier >= stdevMultiplier) {
             console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
@@ -58,12 +58,10 @@ class VolumeSpike {
         }
 
         if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
-            memory = [...Array(Math.min(multiplier, ticksPerSecond)).fill(multiplier)];
+            memory = [...Array(Math.min(Math.ceil(multiplier / 2), ticksPerSecond)).fill(multiplier)];
         }
 
         if (memory && memory.pop()){
-            // Uncomment to do one extra tick instead
-            // memory = null;
             return 1;
         }
 
