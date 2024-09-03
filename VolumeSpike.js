@@ -14,6 +14,8 @@ var lastBarVolume = null;
 var sma = SMA(volumeWindow);
 var std = STDEV(volumeWindow);
 
+var memory = null;
+
 // TODO reset speed for each bar or recent activity
 // TODO how to show sustained momentum?
 // - smoothing or averaging (ema)
@@ -27,6 +29,8 @@ class VolumeSpike {
         lastBarVolume = null;
         sma = SMA(volumeWindow);
         std = STDEV(volumeWindow);
+
+        memory = null;
     }
 
     map(d, idx) {
@@ -62,6 +66,19 @@ class VolumeSpike {
             console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
         // return multiplier > 1 ? multiplier : 0;
+
+        if (memory && memory.length) {
+            console.log(memory);
+        }
+        // TODO use ticks per second to determine how much longer to display
+        if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){ // multiplier >= memory[-1])){
+            memory = [...Array(Math.min(multiplier, ticksPerSecond)).fill(multiplier)];
+        }
+        if (memory && memory.pop()){
+            // Note: uncomment to only do one extra tick instead
+            // memory = null;
+            return 1;
+        }
 
         return multiplier >= stdevMultiplier ? 1 : 0;
     }
