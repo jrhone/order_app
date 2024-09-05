@@ -3,9 +3,29 @@ const SMA = require("./tools/SMA");
 const STDEV = require("./tools/StdDev");
 const meta = require("./tools/meta");
 
-var lastIdx = null;
+const getTicksPerMinute = (time = new Date()) => {
+    const totalMinutes = time.getUTCHours() * 60 + time.getUTCMinutes();
+    const tickRates = {
+        preMarket: 60,      // ~22% of the morning session (65/300)
+        morningSession: 300, // 100% of the morning session
+        lunchHour: 180,     // ~65% of the morning session (195/300)
+        afternoonSession: 240, // ~62% of the morning session (185/300)
+        postMarket: 60,     // ~12% of the morning session (35/300) (make bigger for testing purposes)
+        overnight: 60       // ~3% of the morning session (10/300) (make bigger for testing purposes)
+    };
 
-var ticksPerSecond = 5;
+    return totalMinutes >= 780 && totalMinutes < 870 ? tickRates.preMarket :        // 8:00 AM - 9:30 AM EST
+           totalMinutes >= 870 && totalMinutes < 1020 ? tickRates.morningSession :  // 9:30 AM - 12:00 PM EST
+           totalMinutes >= 1020 && totalMinutes < 1080 ? tickRates.lunchHour :      // 12:00 PM - 1:00 PM EST
+           totalMinutes >= 1080 && totalMinutes < 1200 ? tickRates.afternoonSession : // 1:00 PM - 4:00 PM EST
+           totalMinutes >= 1200 && totalMinutes < 1320 ? tickRates.postMarket :     // 4:00 PM - 6:00 PM EST
+           tickRates.overnight;                                                    // 6:00 PM - 8:00 AM EST
+};
+
+var ticksPerSecond = Math.round(getTicksPerMinute() / 60);
+console.log(`Estimated ticks per second: ${ticksPerSecond}`);
+
+var lastIdx = null;
 var volumeWindow = ticksPerSecond * 60;
 var stdevMultiplier = 2;
 
@@ -15,6 +35,10 @@ var sma = SMA(volumeWindow);
 var std = STDEV(volumeWindow);
 
 var memory = null;
+var numticks = 0;
+var tpsHistory = EMA(3);
+
+var bars = 0;
 
 class VolumeSpike {
     init() {
@@ -26,6 +50,9 @@ class VolumeSpike {
         std = STDEV(volumeWindow);
 
         memory = null;
+        tpsHistory = SMA(5);
+        numticks = 0;
+        bars = 0;
     }
 
     map(d, idx) {
@@ -37,7 +64,18 @@ class VolumeSpike {
         if (lastIdx != idx){
             lastIdx = idx;
             lastBarVolume = null;
+            bars = bars + 1;
+
+            if (numticks) {
+                const z = getTicksPerMinute(d.timestamp());
+                ticksPerSecond = Math.max(numticks / 60, bars == 1 ? z : 1);
+                ticksPerSecond = Math.round(tpsHistory(ticksPerSecond));
+                console.log(`idx:${idx} numticks:${numticks} bartps:${numticks/60} tps:${ticksPerSecond}`);
+            }
+            numticks = 0;
         }
+
+        numticks = numticks + 1;
 
         // Volume Spike
         const barVolume = d.volume();
@@ -50,15 +88,15 @@ class VolumeSpike {
         const multiplier = Math.round(Math.abs((tickVolume - averageVolume) / stdDevVolume));
 
         if (multiplier >= stdevMultiplier) {
-            console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
+            // console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
         if (memory && memory.length) {
-            console.log(memory);
+            // console.log(memory);
         }
 
         if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
-            memory = [...Array(Math.min(Math.ceil(multiplier / 2), ticksPerSecond)).fill(multiplier)];
+            memory = [...Array(Math.min(Math.ceil(multiplier), ticksPerSecond * 2)).fill(multiplier)];
         }
 
         if (memory && memory.pop()){
