@@ -1,0 +1,203 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © jrhone
+
+// strategy("My strategy", overlay=true, margin_long=100, margin_short=100)
+//@version=5
+strategy("15-Minute Range Breakout Strategy with SL & TP (EST, First Hour)", default_qty_value = 2, overlay=true, calc_on_every_tick=true, calc_on_order_fills=false, process_orders_on_close=true)
+
+isNewDay = dayofmonth != dayofmonth[1]
+
+// Define the session start and end time for the 15-minute range (EST)
+sessionStart = timestamp("UTC-4", year, month, dayofmonth, 09, 30)
+sessionEnd = timestamp("UTC-4", year, month, dayofmonth, 09, 45)
+
+// Trading window: first hour after market open (09:30 - 10:30 EST)
+tradingEndTime = timestamp("UTC-4", year, month, dayofmonth, 11, 00) // 11 is sweet spot short term, 12 beats it in a year, 16 tops all in a year
+endofday = timestamp("UTC-4", year, month, dayofmonth, 16, 00)
+
+atr = ta.atr(14)
+
+// Calculate the high and low of the initial 15-minute range
+var float rangeHigh = na
+var float rangeLow = na
+
+var float stop = na
+var float limit = na
+
+var float longBreakevenPrice = na
+var float shortBreakevenPrice = na
+
+var float longStop = na
+var float shortStop = na
+var float lastPivotHigh = na
+var float lastPivotLow = na
+
+var int numTradesToday = 0
+MAX_TRADES = 10 //6 for 1 minute, 5 for 2 minute, 4 for 3 minute, 4 for 4 minute, 3 for 5 minute2, for 10 minute
+
+// TODO what if sl is 30 pts from entry (close 5 min candle) or from low of 5 min candle (70-80 pts away)
+// TODO trailing stop, or take profits
+
+// Detect if a new day has started
+if (isNewDay)
+    rangeHigh := na
+    rangeLow := na
+    numTradesToday := 0
+
+openingRange = time >= sessionStart and time < sessionEnd
+initialBalance = time >= sessionStart and time < tradingEndTime
+
+if (openingRange)
+    rangeHigh := na(rangeHigh) ? high : math.max(rangeHigh, high)
+    rangeLow := na(rangeLow) ? low : math.min(rangeLow, low)
+
+if not (initialBalance)
+    stop := na
+    limit := na
+
+// Define the stop loss and take profit in ticks
+stopLossPoints = 25 * 4 // or 30
+takeProfitPoints = 400 * 4
+trailingStopPoints = 200 // disable at 400
+breakevenPoints = 30 * 4
+var beTriggered = false
+
+// Strategy entry conditions
+enterLong = close > rangeHigh and ((open < rangeHigh and high > rangeHigh) or ta.crossover(high, rangeHigh) or (ta.crossunder(low, rangeHigh) and open > rangeHigh)) // Long on breakout of range high
+enterShort = close < rangeLow and ((open > rangeLow and low < rangeLow) or ta.crossunder(low, rangeLow) or (ta.crossover(high, rangeLow) and open < rangeLow)) // Short on breakdown of range low
+
+breakevenLong = strategy.opentrades > 0 and not na(longBreakevenPrice) and ta.crossover(high, longBreakevenPrice)
+breakevenShort = strategy.opentrades > 0 and not na(shortBreakevenPrice) and ta.crossover(low, shortBreakevenPrice)
+if (breakevenLong or breakevenShort)
+    beTriggered := true
+hitBreakEvenLong = strategy.opentrades > 0 and not na(longBreakevenPrice) and beTriggered and ta.crossunder(low, strategy.opentrades.entry_price(0)) and open > strategy.opentrades.entry_price(0)
+hitBreakEvenShort = strategy.opentrades > 0 and not na(shortBreakevenPrice) and beTriggered and ta.crossover(high, strategy.opentrades.entry_price(0)) and open < strategy.opentrades.entry_price(0)
+
+// trailLong = strategy.opentrades > 0 and not na(longStop) and close - trailingStopPoints > longStop
+// // plot(trailLong ? longStop : 0, title="trailLong", color=color.blue)
+// trailShort = strategy.opentrades > 0 and not na(shortStop) and close + trailingStopPoints < shortStop
+// // plot(trailShort ? shortStop : 0, title="trailShort", color=color.blue)
+
+pivotRange = 5
+pivotHigh = ta.pivothigh(high, pivotRange, pivotRange)
+pivotLow = ta.pivotlow(low, pivotRange, pivotRange)
+if (not na(pivotHigh))
+    lastPivotHigh := pivotHigh
+if (not na(pivotLow))
+    lastPivotLow := pivotLow
+trailLong = strategy.opentrades > 0 and not na(longStop) and not na(pivotHigh)
+trailShort = strategy.opentrades > 0 and not na(shortStop) and not na(pivotLow)
+plot(pivotHigh, color=color.red, linewidth=2, offset=-pivotRange, title='Pivot High')
+plot(pivotLow, color=color.red, linewidth=2, offset=-pivotRange, title='Pivot Low')
+
+g2 = "Color Settings"
+lenAdx = input.int(defval = 13, group = g2, title = "ADX Calculation Length")
+lenDi = input.int(defval = 8, group = g2, title = "DI Calculation Length")
+baselineTrend = input.int(defval = 25, group = g2, title = "Trending Start Baseline")
+
+getTrend(tf) =>
+    [dip, dim, ADX] = request.security(syminfo.tickerid, tf, ta.dmi(lenDi, lenAdx))
+    (dip > dim and ADX > baselineTrend) ? 1 : (dip < dim and ADX > baselineTrend) ? -1 : 0
+
+trend1d = getTrend("D")
+trend4h = getTrend("240")
+trend1h = getTrend("60")
+trend30 = getTrend("30")
+trending = trend1d != 0 or trend4h != 0 or trend1h != 0 or trend30 != 0
+plot(trending ? 1 : 0, title="trending", color=color.blue, display=display.data_window)
+
+// Execute trades with stop loss and take profit, only during the first hour
+if (time >= sessionEnd and time < tradingEndTime and numTradesToday < MAX_TRADES and trending)
+    if (enterLong)
+        stop := rangeHigh - stopLossPoints * syminfo.mintick
+        limit := rangeHigh + takeProfitPoints * syminfo.mintick
+        strategy.entry("Long", strategy.long, stop=stop, limit=limit)
+        strategy.exit("SL/TP", from_entry = "Long", stop=stop, limit=limit, comment_profit ='TP', comment_loss='SL')
+        longBreakevenPrice := rangeHigh + breakevenPoints * syminfo.mintick
+        shortBreakevenPrice := na
+        beTriggered := false
+        numTradesToday := numTradesToday + 1
+        longStop := stop
+        shortStop := na
+    if (enterShort)
+        stop := rangeLow + stopLossPoints * syminfo.mintick
+        limit := rangeLow - takeProfitPoints * syminfo.mintick
+        strategy.entry("Short", strategy.short, stop=stop, limit=limit)
+        strategy.exit("SL/TP", from_entry = "Short", stop=stop, limit=limit, comment_profit ='TP', comment_loss='SL')
+        shortBreakevenPrice := rangeLow - breakevenPoints * syminfo.mintick
+        longBreakevenPrice := na
+        beTriggered := false
+        numTradesToday := numTradesToday + 1
+        shortStop := stop
+        longStop := na
+
+if (time >= sessionEnd and time < endofday)
+    // if (breakevenLong)
+        // strategy.exit("SL", from_entry = "Long", stop=strategy.opentrades.entry_price(0), comment_loss='SL')
+        // strategy.exit("SL", from_entry = "Long", loss=0)
+    if (hitBreakEvenLong)
+        strategy.close("Long", comment = 'breakeven')
+        longBreakevenPrice := na
+        beTriggered := false
+    if (hitBreakEvenShort)
+        strategy.close("Short", comment = 'breakeven')
+        shortBreakevenPrice := na
+        beTriggered := false
+
+if (trailLong)
+    // stop := close - trailingStopPoints
+    stop := lastPivotLow - atr
+    longStop := stop
+// TODO optionally wait for close to cross the stop
+hitTrailLong = strategy.opentrades > 0 and not na(longStop) and ta.crossunder(low, longStop) and open > longStop
+if (trailShort)
+//     stop := close + trailingStopPoints
+    stop := lastPivotHigh + atr
+    shortStop := stop
+hitTrailShort = strategy.opentrades > 0 and not na(shortStop) and ta.crossover(high, shortStop) and open < shortStop
+
+if (hitTrailLong and strategy.position_size > 0)
+    strategy.order("Reduce Long", strategy.short, qty=1, comment = 'Trailing')
+    longStop := low - atr// * syminfo.mintick
+    stop := longStop
+    // strategy.close("Long", comment = 'Trailing')
+if (hitTrailShort and strategy.position_size < 0)
+    strategy.order("Reduce Short", strategy.long, qty=1, comment = 'Trailing')
+    shortStop := high + atr// * syminfo.mintick
+    stop := shortStop
+    // strategy.close("Short", comment = 'Trailing')
+
+if (time >= endofday)
+    strategy.close_all('End of Day')
+
+plot(breakevenLong == true ? 1 : 0, title="breakevenLong", color=color.blue, display=display.data_window)
+plot(hitBreakEvenLong == true ? 1 : 0, title="hitBreakEvenLong", color=color.blue, display=display.data_window)
+
+// Plot the range for visual reference
+plot((time >= sessionStart and time < tradingEndTime) ? rangeHigh : na, title="Range High", color=color.green, linewidth=2, style=plot.style_linebr)
+plot((time >= sessionStart and time < tradingEndTime) ? rangeLow : na, title="Range Low", color=color.red, linewidth=2, style=plot.style_linebr)
+plotshape(time == sessionEnd, title="Opening range end", location=location.abovebar, color=color.blue, style=shape.cross)
+plot(time, title="time", color=color.blue, display=display.data_window)
+plot(sessionStart, title="sessionStart", color=color.blue, display=display.data_window)
+plot(sessionEnd, title="sessionEnd", color=color.blue, display=display.data_window)
+plot(tradingEndTime, title="tradingEndTime", color=color.blue, display=display.data_window)
+plot(time >= sessionStart and time < tradingEndTime ? 1 : 0, title="in ib", color=color.blue, display=display.data_window)
+plot(time >= sessionStart and time < endofday ? stop : na, title="stop", color=color.red) // , style=plot.style_linebr)
+plot(initialBalance ? limit : na, title="limit", color=color.green, style=plot.style_linebr)
+// Plot visual signs for trade entry
+// plotshape(enterLong ? true : na, title="Long Entry", location=location.belowbar, color=color.green, style=shape.arrowup)
+// plotshape(enterShort ? true : na, title="Short Entry", location=location.abovebar, color=color.red, style=shape.arrowdown)
+
+// // Plot TP and SL lines for long positions
+// plot(strategy.position_size > 0 ? rangeHigh + takeProfitPoints * syminfo.mintick : na, title="Long Take Profit", color=color.blue, linewidth=2, style=plot.style_linebr)
+plot(strategy.position_size, title="position_size", color=color.blue, display=display.data_window)
+// plotshape(strategy.position_size > 0 ? rangeHigh - stopLossPoints * syminfo.mintick : na, title="Long Stop Loss", color=color.yellow, style=shape.circle)
+
+// // Plot TP and SL lines for short positions
+// plot(strategy.position_size < 0 ? rangeLow - takeProfitPoints * syminfo.mintick : na, title="Short Take Profit", color=color.blue, linewidth=2, style=plot.style_linebr)
+// plot(strategy.position_size < 0 ? rangeLow + stopLossPoints * syminfo.mintick : na, title="Short Stop Loss", color=color.red, linewidth=2, style=plot.style_linebr)
+
+plotshape(timeframe.period == "1" and math.abs(close-open) >= 10, title="10+ pts", location=location.abovebar, color=color.red, style=shape.flag)
+plotshape(timeframe.period == "1" and math.abs(close-open) >= 20, title="20+ pts", location=location.abovebar, color=color.blue, style=shape.triangleup)
+
+// TODO check for high volume on delta on the 1-min candle that closes above the opening range.. if high, enter!
