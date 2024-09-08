@@ -3,7 +3,7 @@
 
 // strategy("My strategy", overlay=true, margin_long=100, margin_short=100)
 //@version=5
-strategy("15-Minute Range Breakout Strategy with SL & TP (EST, First Hour)", default_qty_value = 2, overlay=true, pyramiding=0, calc_on_every_tick=true, calc_on_order_fills=false, process_orders_on_close=true)
+strategy("15-Minute Range Breakout Strategy with SL & TP (EST, First Hour)", default_qty_value = 2, overlay=true, pyramiding=6, calc_on_every_tick=true, calc_on_order_fills=false, process_orders_on_close=true)
 
 isNewDay = dayofmonth != dayofmonth[1]
 
@@ -35,8 +35,7 @@ var float lastPivotLow = na
 // var int pivotIndex = na
 var int entryIndex = na
 
-var float compound_sl = na
-var float compound_tp = na
+var bool compounded_today = na
 
 var int numTradesToday = 0
 MAX_TRADES = 10 //6 for 1 minute, 5 for 2 minute, 4 for 3 minute, 4 for 4 minute, 3 for 5 minute2, for 10 minute
@@ -49,6 +48,7 @@ if (isNewDay)
     rangeHigh := na
     rangeLow := na
     numTradesToday := 0
+    compounded_today := false
 
 openingRange = time >= sessionStart and time < sessionEnd
 initialBalance = time >= sessionStart and time < tradingEndTime
@@ -111,6 +111,7 @@ trend1d = getTrend("D")
 trend4h = getTrend("240")
 trend1h = getTrend("60")
 trend30 = getTrend("30")
+trend5 = getTrend("5")
 trending = trend1d != 0 or trend4h != 0 or trend1h != 0 or trend30 != 0
 plot(trending ? 1 : 0, title="trending", color=color.blue, display=display.data_window)
 
@@ -128,7 +129,7 @@ if (time >= sessionEnd and time < tradingEndTime and numTradesToday < MAX_TRADES
         longStop := stop
         shortStop := na
         entryIndex := bar_index
-    if (enterShort and strategy.position_size >= 0)
+    else if (enterShort and strategy.position_size >= 0)
         stop := rangeLow + stopLossPoints * syminfo.mintick
         limit := rangeLow - takeProfitPoints * syminfo.mintick
         strategy.entry("Short", strategy.short, stop=stop, limit=limit)
@@ -149,7 +150,7 @@ if (time >= sessionEnd and time < endofday)
         strategy.close("Long", comment = 'breakeven')
         longBreakevenPrice := na
         beTriggered := false
-    if (hitBreakEvenShort)
+    else if (hitBreakEvenShort)
         strategy.close("Short", comment = 'breakeven')
         shortBreakevenPrice := na
         beTriggered := false
@@ -159,11 +160,12 @@ if (trailLong)
     stop := lastPivotLow - atr
     longStop := stop
 // TODO optionally wait for close to cross the stop
-hitTrailLong = strategy.opentrades > 0 and not na(longStop) and ta.crossunder(low, longStop) and open > longStop
-if (trailShort)
+else if (trailShort)
 //     stop := close + trailingStopPoints
     stop := lastPivotHigh + atr
     shortStop := stop
+
+hitTrailLong = strategy.opentrades > 0 and not na(longStop) and ta.crossunder(low, longStop) and open > longStop
 hitTrailShort = strategy.opentrades > 0 and not na(shortStop) and ta.crossover(high, shortStop) and open < shortStop
 
 if (hitTrailLong and strategy.position_size > 0)
@@ -171,68 +173,24 @@ if (hitTrailLong and strategy.position_size > 0)
     longStop := low - atr// * syminfo.mintick
     stop := longStop
     // strategy.close("Long", comment = 'Trailing')
-if (hitTrailShort and strategy.position_size < 0)
+else if (hitTrailShort and strategy.position_size < 0)
     strategy.order("Reduce Short", strategy.long, qty=1, comment = 'Trailing')
     shortStop := high + atr// * syminfo.mintick
     stop := shortStop
     // strategy.close("Short", comment = 'Trailing')
 
-// TODO entry works but not TP/SL
 // TODO should not be above existing stop loss
-// TODO its using a pivot from before the entry so it fires shortly after entry (when it's detected)
-if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size == 2 and bar_index - pivotRange > entryIndex)
-    strategy.order("Long Pivot", strategy.long)
-    compound_sl := pivotLow
-    compound_tp := close + 100
-    // strategy.exit("SL/TP Pivot", from_entry = "Long Pivot", stop=pivotLow, limit=close+100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
-if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size == -2 and bar_index - pivotRange > entryIndex)
-    strategy.order("Short Pivot", strategy.short) //, stop=pivotHigh, limit=close-100)
-    compound_sl := pivotHigh
-    compound_tp := close - 100
-    // strategy.entry("Short Pivot", strategy.short, stop=pivotHigh, limit=close-100)
-    // strategy.exit("SL/TP Pivot", from_entry = "Short Pivot", stop=pivotHigh, limit=close-100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
-    // strategy.order("Short Pivot", strategy.long, comment = 'Short Pivot')
-    // strategy.order("Short Pivot SL", strategy.short, stop=pivotHigh, limit=close-100, comment = 'Short Pivot SL')
+if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size >= 2 and bar_index - pivotRange > entryIndex and trend5 == 1) // and compounded_today == false)
+    strategy.entry("Long Pivot", strategy.long)
+    strategy.exit("SL/TP Pivot", from_entry = "Long Pivot", stop=pivotLow, limit=close+100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
+    compounded_today := true
+else if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size <= -2 and bar_index - pivotRange > entryIndex and trend5 == -1)// and compounded_today == false)
+    strategy.entry("Short Pivot", strategy.short)
+    strategy.exit("SL/TP Pivot", from_entry = "Short Pivot", stop=pivotHigh, limit=close-100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
+    compounded_today := true
+
 plot(not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size == 2 ? 1 : 0, title="pivot long", color=color.blue, display=display.data_window)
 plot(not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size == -2 ? 1 : 0, title="pivot short", color=color.blue, display=display.data_window)
-
-var x = ta.crossover(high, compound_tp) and open < compound_tp
-var y = ta.crossover(low, compound_sl)
-var z = ta.crossover(low, compound_tp)
-var q = ta.crossover(high, compound_sl)
-
-hitTP = strategy.position_size > 0 and not na(compound_sl) and not na(compound_tp) ? x and open < compound_tp : false
-hitSL = strategy.position_size > 0 and not na(compound_sl) and not na(compound_tp) ? y and open > compound_sl : false
-
-hitTP := strategy.position_size < 0 and not na(compound_sl) and not na(compound_tp) ? z and open > compound_tp : hitTP
-hitSL := strategy.position_size < 0 and not na(compound_sl) and not na(compound_tp) ? q and open < compound_sl : hitSL
-
-if (strategy.position_size > 0 and hitTP or hitSL)
-    strategy.order("TP/SL Pivot", strategy.short)
-    compound_sl := na
-    compound_tp := na
-
-if (strategy.position_size < 0 and hitTP or hitSL)
-    strategy.order("TP/SL Pivot", strategy.long)
-    compound_sl := na
-    compound_tp := na
-
-// if (strategy.opentrades > 0 and not na(compound_sl) and not na(compound_tp))
-//     if (strategy.position_size > 0)
-//         hitTP = ta.crossover(high, compound_tp) and open < compound_tp
-//         hitSL = ta.crossover(low, compound_sl) and open > compound_sl
-//         if (hitTP or hitSL)
-//             strategy.order("TP/SL Pivot", strategy.short)
-//             compound_sl := na
-//             compound_tp := na
-//     if (strategy.position_size < 0)
-//         hitTP = ta.crossover(low, compound_tp) and open > compound_tp
-//         hitSL = ta.crossover(high, compound_sl) and open < compound_sl
-//         if (hitTP or hitSL)
-//             strategy.order("TP/SL Pivot", strategy.long)
-//             compound_sl := na
-//             compound_tp := na
-
 
 if (time >= endofday)
     strategy.close_all('End of Day')
