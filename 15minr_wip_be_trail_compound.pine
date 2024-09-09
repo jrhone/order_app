@@ -180,14 +180,16 @@ else if (hitTrailShort and strategy.position_size < 0)
     // strategy.close("Short", comment = 'Trailing')
 
 // TODO consider adding atr as buffer, but one year testing shows worse results
-if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size >= 2 and bar_index - pivotRange > entryIndex -1 and trend5 == 1) // and compounded_today == false)
+if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size >= 2 and bar_index - pivotRange > entryIndex and trend5 == 1) // and compounded_today == false)
     strategy.entry("Long Pivot", strategy.long)
     strategy.exit("SL/TP Pivot", from_entry = "Long Pivot", stop=pivotLow, limit=close+100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
     compounded_today := true
-else if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size <= -2 and bar_index - pivotRange > entryIndex -1 and trend5 == -1)// and compounded_today == false)
+else if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size <= -2 and bar_index - pivotRange > entryIndex and trend5 == -1)// and compounded_today == false)
     strategy.entry("Short Pivot", strategy.short)
     strategy.exit("SL/TP Pivot", from_entry = "Short Pivot", stop=pivotHigh, limit=close-100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
     compounded_today := true
+
+plot(trend5, title="trend 5", color=color.blue, display=display.data_window)
 
 plot(not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size == 2 ? 1 : 0, title="pivot long", color=color.blue, display=display.data_window)
 plot(not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size == -2 ? 1 : 0, title="pivot short", color=color.blue, display=display.data_window)
