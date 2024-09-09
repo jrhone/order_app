@@ -40,8 +40,8 @@ var bool compounded_today = na
 var int numTradesToday = 0
 MAX_TRADES = 10 //6 for 1 minute, 5 for 2 minute, 4 for 3 minute, 4 for 4 minute, 3 for 5 minute2, for 10 minute
 
-// TODO what if sl is 30 pts from entry (close 5 min candle) or from low of 5 min candle (70-80 pts away)
-// TODO trailing stop, or take profits
+// TODO Weird breakeven late in the trend
+// TODO stop loss line is going haywire
 
 // Detect if a new day has started
 if (isNewDay)
@@ -179,12 +179,12 @@ else if (hitTrailShort and strategy.position_size < 0)
     stop := shortStop
     // strategy.close("Short", comment = 'Trailing')
 
-// TODO should not be above existing stop loss
-if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size >= 2 and bar_index - pivotRange > entryIndex and trend5 == 1) // and compounded_today == false)
+// TODO consider adding atr as buffer, but one year testing shows worse results
+if (not na(pivotLow) and time >= sessionEnd and time < endofday and strategy.position_size >= 2 and bar_index - pivotRange > entryIndex -1 and trend5 == 1) // and compounded_today == false)
     strategy.entry("Long Pivot", strategy.long)
     strategy.exit("SL/TP Pivot", from_entry = "Long Pivot", stop=pivotLow, limit=close+100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
     compounded_today := true
-else if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size <= -2 and bar_index - pivotRange > entryIndex and trend5 == -1)// and compounded_today == false)
+else if (not na(pivotHigh) and time >= sessionEnd and time < endofday and strategy.position_size <= -2 and bar_index - pivotRange > entryIndex -1 and trend5 == -1)// and compounded_today == false)
     strategy.entry("Short Pivot", strategy.short)
     strategy.exit("SL/TP Pivot", from_entry = "Short Pivot", stop=pivotHigh, limit=close-100, comment_profit ='TP Pivot', comment_loss='SL Pivot')
     compounded_today := true
