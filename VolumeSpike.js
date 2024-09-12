@@ -25,9 +25,10 @@ const getTicksPerMinute = (time = new Date()) => {
 var ticksPerSecond = Math.round(getTicksPerMinute() / 60);
 console.log(`Estimated ticks per second: ${ticksPerSecond}`);
 
+// TODO should we bucket volume ticks by 1 second similar to speed?
 var lastIdx = null;
 var volumeWindow = ticksPerSecond * 60;
-var stdevMultiplier = 2;
+var stdevMultiplier = 4;
 
 var volumes = [];
 var lastBarVolume = null;
@@ -36,7 +37,7 @@ var std = STDEV(volumeWindow);
 
 var memory = null;
 var numticks = 0;
-var tpsHistory = EMA(3);
+var tpsHistory = SMA(5);
 
 var bars = 0;
 
@@ -68,9 +69,9 @@ class VolumeSpike {
 
             if (numticks) {
                 const z = getTicksPerMinute(d.timestamp());
-                ticksPerSecond = Math.max(numticks / 60, bars == 1 ? z : 1);
-                ticksPerSecond = Math.round(tpsHistory(ticksPerSecond));
-                console.log(`idx:${idx} numticks:${numticks} bartps:${numticks/60} tps:${ticksPerSecond}`);
+                const bt =  Math.round(Math.max(numticks / 60, bars == 1 ? z : 1));
+                ticksPerSecond = Math.round(tpsHistory(bt));
+                console.log(`idx:${idx} numticks:${numticks} bartps:${bt} tps:${ticksPerSecond}`);
             }
             numticks = 0;
         }
@@ -88,7 +89,7 @@ class VolumeSpike {
         const multiplier = Math.round(Math.abs((tickVolume - averageVolume) / stdDevVolume));
 
         if (multiplier >= stdevMultiplier) {
-            // console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
+            console.log(`Volume spike: ${multiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
         if (memory && memory.length) {
@@ -96,7 +97,7 @@ class VolumeSpike {
         }
 
         if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
-            memory = [...Array(Math.min(Math.ceil(multiplier), ticksPerSecond * 2)).fill(multiplier)];
+            memory = [...Array(Math.min(Math.ceil(multiplier / 2), ticksPerSecond)).fill(multiplier)];
         }
 
         if (memory && memory.pop()){

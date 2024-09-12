@@ -1,0 +1,26 @@
+//@version=5
+indicator( overlay = true, title = "MTF Trend" )
+
+g2 = "Color Settings"
+
+lenAdx = input.int(defval = 13, group = g2, title = "ADX Calculation Length")
+lenDi = input.int(defval = 8, group = g2, title = "DI Calculation Length")
+baselineTrend = input.int(defval = 25, group = g2, title = "Trending Start Baseline")
+
+getTrend(tf) =>
+    [dip, dim, ADX] = request.security(syminfo.tickerid, tf, ta.dmi(lenDi, lenAdx))
+    (dip > dim and ADX > baselineTrend) ? 1 : (dip < dim and ADX > baselineTrend) ? -1 : 0
+
+trend1d = getTrend("D")
+trend4h = getTrend("240")
+trend1h = getTrend("60")
+trend15m = getTrend("15")
+trend5m = getTrend("5")
+trend1m = getTrend("1")
+
+// trend = " 5m: " + str.tostring(trend5m) + " 15m: " + str.tostring(trend15m) + " 1H: " + str.tostring(trend1h) + " 4H: " + str.tostring(trend4h) + " 1D: " + str.tostring(trend1d) 
+trend = " 1m: " + str.tostring(trend1m) + " 5m: " + str.tostring(trend5m) + " 15m: " + str.tostring(trend15m) + " 1H: " + str.tostring(trend1h) + " 4H: " + str.tostring(trend4h)
+
+var table atrDisplay = table.new(position.bottom_right, 1, 1)
+if barstate.islast
+    table.cell(atrDisplay, 0, 0, trend, text_color = color.black)

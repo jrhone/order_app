@@ -27,9 +27,9 @@ var ticksPerSecond = getTicksPerMinute() / 60;
 console.log(`Estimated ticks per second: ${ticksPerSecond}`);
 
 // TODO these need to be adjusted for new tick per second
-var deltaWindow = ticksPerSecond * 2; // TODO test out 2 seconds
+var deltaWindow = ticksPerSecond * 5;
 var speedWindow = ticksPerSecond * 60;
-var stdevMultiplier = 3;
+var stdevMultiplier = 4;
 
 var lastDelta = null;
 var maxSpeed = 1e-10; // TODO change divide by 0 checks
@@ -41,7 +41,7 @@ var averageSpeeds = SMA(speedWindow);
 var speedStdev = STDEV(speedWindow);
 
 var numticks = 0;
-var tpsHistory = EMA(3);
+var tpsHistory = SMA(5);
 
 var memory = null;
 var bars = 0;
@@ -78,8 +78,8 @@ class DeltaSpeed {
 
             if (numticks) {
                 const z = getTicksPerMinute(d.timestamp());
-                ticksPerSecond = Math.max(numticks / 60, bars == 1 ? z : 1);
-                ticksPerSecond = Math.round(tpsHistory(ticksPerSecond));
+                const bt =  Math.round(Math.max(numticks / 60, bars == 1 ? z : 1));
+                ticksPerSecond = Math.round(tpsHistory(bt));
                 console.log(`idx:${idx} numticks:${numticks} bartps:${numticks/60} tps:${ticksPerSecond}`);
             }
     
@@ -87,7 +87,6 @@ class DeltaSpeed {
         }
 
         numticks = numticks + 1;
-        const now = new Date()
 
         const bidVolume = d.bidVolume();
         const askVolume = d.offerVolume();
@@ -106,7 +105,7 @@ class DeltaSpeed {
         const multiplier = Math.round(Math.abs(rawMultiplier));
 
         if (multiplier >= stdevMultiplier) {
-            // console.log(`High speed: ${multiplier} at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
+            console.log(`High speed: ${multiplier} at ${d.value()}: ${tickSpeed.toFixed(2)} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
         if (memory && memory.length) {
@@ -127,7 +126,7 @@ class DeltaSpeed {
         // if (!multiplier){
         // if (multiplier < stdevMultiplier){
         // if (multiplier < 0.5){
-        if (Math.abs(rawMultiplier) < 2){ // stdevMultiplier (currently 3)
+        if (Math.abs(rawMultiplier) < stdevMultiplier){ // stdevMultiplier (currently 3)
             return 0;
         }
 

@@ -54,10 +54,13 @@ var memory = null;
 var bars = 0;
 
 var drawings = [];
+var numAlerts = 0;
+var numLiveBars = 0;
 
 // TODO get stats on max, avg and distribution of speeds during IB
 // TODO a candle with really high speed will show low speed intracandle after
-
+// TODO does the delta and volume data actually belong to the previous tick? by the time I get it the orders are executed and price adjusted
+//      doesn't mean it's the price where the orders came in
 class VolumeSpeedCombo {
     init() {
         lastDelta = null;
@@ -80,11 +83,17 @@ class VolumeSpeedCombo {
         bars = 0;
 
         drawings = [];
+        numAlerts = 0;
+        numLiveBars = 0;
     }
 
     map(d, idx) {
         if (!d.isLast()){
             return 0;
+        }
+        else if (lastIdx != idx){
+            numLiveBars = numLiveBars + 1;
+            console.log(`stdevMultiplier status: ${stdevMultiplier}: ${numAlerts} / ${numLiveBars} = ${numAlerts / numLiveBars}`)
         }
 
         // Reset stuff each candle
@@ -142,33 +151,19 @@ class VolumeSpeedCombo {
             console.log(`Volume spike: ${volumeMultiplier} at ${d.value()}: ${tickVolume} (at ${d.timestamp().toLocaleTimeString()})`);
         }
 
-        // if (memory && memory.length) {
-        //     // console.log(memory);
-        // }
-
-        // if (multiplier >= stdevMultiplier && (!memory || !memory.length || multiplier > memory.length)){
-        //     memory = [...Array(Math.min(Math.ceil(multiplier), ticksPerSecond * 2)).fill(rawSpeedMultiplier)]; // tickSpeed
-        // }
-
-        // if (memory){
-        //     const y = memory.pop();
-        //     if (y){
-        //         return y;
-        //     }
-        // }
-
-        // if (Math.abs(rawSpeedMultiplier) < stdevMultiplier){
-        //     return 0;
-        // }
-
-        // return volumeMultiplier >= stdevMultiplier ? 1 : 0;
-        // return Math.abs(rawSpeedMultiplier) >= stdevMultiplier ? rawSpeedMultiplier : 0;
-
-        // TODO get lines to remain on the chart instead of overdrawing the recent
-
         if (volumeMultiplier >= stdevMultiplier && Math.abs(rawSpeedMultiplier) >= stdevMultiplier){
             console.log("double spike!");
             drawings.push({idx: d.index(), price: d.value(), speedMult: rawSpeedMultiplier, volMult: volumeMultiplier});
+            numAlerts = numAlerts + 1;
+        }
+
+        if (numAlerts / numLiveBars < 1) {
+            stdevMultiplier = stdevMultiplier - 1;
+            console.log(`lower stdevMultiplier to ${stdevMultiplier}: ${numAlerts} / ${numLiveBars} = ${numAlerts / numLiveBars}`)
+        }
+        else if (numAlerts / numLiveBars > 5) {
+            stdevMultiplier = stdevMultiplier + 1;
+            console.log(`raise stdevMultiplier to ${stdevMultiplier}: ${numAlerts} / ${numLiveBars} = ${numAlerts / numLiveBars}`)
         }
 
         return {
@@ -201,7 +196,7 @@ class VolumeSpeedCombo {
                         tag: "Text",
                         key: `${item.price}-ex`,
                         point: {
-                            x: op(du(item.idx + .5), '-', px(2)),
+                            x: op(du(item.idx + .5), '-', px(14)),
                             y: op(du(item.price), '-', px(4)),
                         },
                         text: `s:${Math.round(item.speedMult)} v:${Math.round(item.volMult)}`,

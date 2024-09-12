@@ -42,6 +42,20 @@ MAX_TRADES = 10 //6 for 1 minute, 5 for 2 minute, 4 for 3 minute, 4 for 4 minute
 
 // TODO Weird breakeven late in the trend
 // TODO stop loss line is going haywire
+// TODO draw breakeven line
+// TODO the strategy never re-enters after a take profit
+//   I can take profits at some point and re-enter later, huge differentiator!
+// TODO
+// - Why the early TP?
+// - test without candle close again
+// - check break even from entry price instead of range
+// - try with increased quantity seems to increase profits due to trailing
+// - try again with take profits and increased trailing quantity
+// - add auto break even to the atm 
+// - try to maximize drawdown with consistent profits instead of max profits, over each week
+// -- $3k to pass eval in one week
+// -- $400 per day for pa ($2k / week)
+// -- $400 to $600 a day
 
 // Detect if a new day has started
 if (isNewDay)
@@ -93,8 +107,10 @@ if (not na(pivotHigh))
 if (not na(pivotLow))
     lastPivotLow := pivotLow
     // pivotIndex = bar_index
-trailLong = strategy.opentrades > 0 and not na(longStop) and not na(pivotHigh)
-trailShort = strategy.opentrades > 0 and not na(shortStop) and not na(pivotLow)
+
+// todo confused what's going on here.. the trail stop can't be worse than existing stop for position
+trailLong = strategy.opentrades > 0 and not na(longStop) and not na(pivotLow) // Todo swap these?
+trailShort = strategy.opentrades > 0 and not na(shortStop) and not na(pivotHigh)
 plot(pivotHigh, color=color.red, linewidth=2, offset=-pivotRange, title='Pivot High')
 plot(pivotLow, color=color.red, linewidth=2, offset=-pivotRange, title='Pivot Low')
 
